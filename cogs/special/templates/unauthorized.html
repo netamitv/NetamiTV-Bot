@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Nicht autorisiert - AutoMod Dashboard{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body text-center p-5">
+                <div class="mb-4">
+                    <i class="fas fa-ban fa-5x text-danger mb-3"></i>
+                    <h1 class="card-title text-danger">Zugriff verweigert</h1>
+                    <p class="card-text">
+                        Hallo <strong>{{ username }}</strong>, du bist nicht autorisiert, auf dieses Dashboard zuzugreifen.
+                    </p>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Nur autorisierte Moderatoren und Administratoren können auf das AutoMod Dashboard zugreifen.
+                </div>
+                
+                <div class="mt-4">
+                    <a href="/logout" class="btn btn-secondary me-2">
+                        <i class="fas fa-sign-out-alt me-2"></i>Abmelden
+                    </a>
+                    <a href="/" class="btn btn-primary">
+                        <i class="fas fa-home me-2"></i>Zur Startseite
+                    </a>
+                </div>
+                
+                <div class="mt-4">
+                    <small class="text-muted">
+                        Falls du glaubst, dass dies ein Fehler ist, wende dich an einen Administrator.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

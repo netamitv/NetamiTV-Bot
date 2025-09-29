@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}AutoMod Dashboard - Anmeldung{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body text-center p-5">
+                <div class="mb-4">
+                    <i class="fas fa-shield-alt fa-5x text-primary mb-3"></i>
+                    <h1 class="card-title">AutoMod Dashboard</h1>
+                    <p class="card-text text-muted">
+                        Detaillierte Audit-Logs und Moderations-Übersicht für deinen Discord Server
+                    </p>
+                </div>
+                
+                <div class="mb-4">
+                    <h5>Features:</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>Detaillierte Audit-Logs</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Vollständige Nachrichteninhalte</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Benutzer- und Kanal-Informationen</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Filterbare Ansichten</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Echtzeit-Updates</li>
+                    </ul>
+                </div>
+                
+                <a href="/login" class="btn btn-primary btn-lg">
+                    <i class="fab fa-discord me-2"></i>Mit Discord anmelden
+                </a>
+                
+                <div class="mt-4">
+                    <small class="text-muted">
+                        Du musst ein autorisierter Benutzer sein, um auf das Dashboard zugreifen zu können.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

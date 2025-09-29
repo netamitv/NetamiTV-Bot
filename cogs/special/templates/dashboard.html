@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+
+{% block title %}AutoMod Dashboard - Audit Logs{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-clipboard-list me-2"></i>Audit Logs Dashboard</h2>
+            <div class="text-muted">
+                Angemeldet als: <strong>{{ user.username }}</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<ul class="nav nav-tabs" id="logTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="all-logs-tab" data-bs-toggle="tab" data-bs-target="#all-logs" type="button" role="tab">
+            <i class="fas fa-list me-2"></i>Alle Logs
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="bot-logs-tab" data-bs-toggle="tab" data-bs-target="#bot-logs" type="button" role="tab">
+            <i class="fas fa-robot me-2"></i>Bot Aktionen
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="moderation-logs-tab" data-bs-toggle="tab" data-bs-target="#moderation-logs" type="button" role="tab">
+            <i class="fas fa-gavel me-2"></i>Moderation
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="server-logs-tab" data-bs-toggle="tab" data-bs-target="#server-logs" type="button" role="tab">
+            <i class="fas fa-server me-2"></i>Server Events
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="logTabContent">
+    <!-- All Logs Tab -->
+    <div class="tab-pane fade show active" id="all-logs" role="tabpanel">
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="actionFilter" class="form-label">Aktion filtern:</label>
+                    <select class="form-select" id="actionFilter">
+                        <option value="">Alle Aktionen</option>
+                        <option value="message_deleted">Nachricht gelöscht</option>
+                        <option value="user_banned">Benutzer gebannt</option>
+                        <option value="user_timeout">Benutzer timeout</option>
+                        <option value="user_kicked">Benutzer gekickt</option>
+                        <option value="spam_detected">Spam erkannt</option>
+                        <option value="word_filter">Wort-Filter</option>
+                        <option value="ticket_created">Ticket erstellt</option>
+                        <option value="ticket_closed">Ticket geschlossen</option>
+                        <option value="temp_channel_created">Temp Channel erstellt</option>
+                        <option value="temp_channel_deleted">Temp Channel gelöscht</option>
+                        <option value="role_added">Rolle hinzugefügt</option>
+                        <option value="role_removed">Rolle entfernt</option>
+                        <option value="channel_created">Channel erstellt</option>
+                        <option value="channel_deleted">Channel gelöscht</option>
+                        <option value="member_joined">Mitglied beigetreten</option>
+                        <option value="member_left">Mitglied verlassen</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="severityFilter" class="form-label">Schweregrad:</label>
+                    <select class="form-select" id="severityFilter">
+                        <option value="">Alle Schweregrade</option>
+                        <option value="high">Hoch</option>
+                        <option value="medium">Mittel</option>
+                        <option value="low">Niedrig</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="userSearch" class="form-label">Benutzer suchen:</label>
+                    <input type="text" class="form-control" id="userSearch" placeholder="Benutzername oder ID...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" id="applyFilters">
+                        <i class="fas fa-filter me-2"></i>Filtern
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                        <h5 class="card-title" id="highSeverityCount">0</h5>
+                        <p class="card-text">Hohe Priorität</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-exclamation-circle fa-2x text-warning mb-2"></i>
+                        <h5 class="card-title" id="mediumSeverityCount">0</h5>
+                        <p class="card-text">Mittlere Priorität</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-info-circle fa-2x text-success mb-2"></i>
+                        <h5 class="card-title" id="lowSeverityCount">0</h5>
+                        <p class="card-text">Niedrige Priorität</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-list fa-2x text-info mb-2"></i>
+                        <h5 class="card-title" id="totalCount">0</h5>
+                        <p class="card-text">Gesamt Einträge</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Container -->
+        <div id="logsContainer">
+            <!-- Logs will be loaded here via JavaScript -->
+        </div>
+
+        <!-- Pagination -->
+        <nav aria-label="Log pagination" id="paginationContainer" style="display: none;">
+            <ul class="pagination justify-content-center" id="pagination">
+                <!-- Pagination will be generated by JavaScript -->
+            </ul>
+        </nav>
+
+        <!-- Loading Spinner -->
+        <div class="text-center" id="loadingSpinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Laden...</span>
+            </div>
+            <p class="mt-2">Lade Audit Logs...</p>
+        </div>
+    </div>
+
+    <!-- Bot Logs Tab -->
+    <div class="tab-pane fade" id="bot-logs" role="tabpanel">
+        <div class="filter-section">
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="botActionFilter" class="form-label">Bot Aktion filtern:</label>
+                    <select class="form-select" id="botActionFilter">
+                        <option value="">Alle Bot Aktionen</option>
+                        <option value="ticket_created">Ticket erstellt</option>
+                        <option value="ticket_closed">Ticket geschlossen</option>
+                        <option value="temp_channel_created">Temp Channel erstellt</option>
+                        <option value="temp_channel_deleted">Temp Channel gelöscht</option>
+                        <option value="user_timeout">Bot Timeout</option>
+                        <option value="automod_action">AutoMod Aktion</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="botUserSearch" class="form-label">Benutzer suchen:</label>
+                    <input type="text" class="form-control" id="botUserSearch" placeholder="Benutzername oder ID...">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" id="applyBotFilters">
+                        <i class="fas fa-filter me-2"></i>Filtern
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="botLogsContainer">
+            <!-- Bot logs will be loaded here -->
+        </div>
+
+        <nav aria-label="Bot log pagination" id="botPaginationContainer" style="display: none;">
+            <ul class="pagination justify-content-center" id="botPagination">
+                <!-- Pagination will be generated by JavaScript -->
+            </ul>
+        </nav>
+
+        <div class="text-center" id="botLoadingSpinner" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Laden...</span>
+            </div>
+            <p class="mt-2">Lade Bot Logs...</p>
+        </div>
+    </div>
+
+    <!-- Moderation Logs Tab -->
+    <div class="tab-pane fade" id="moderation-logs" role="tabpanel">
+        <div class="filter-section">
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="moderationActionFilter" class="form-label">Moderation Aktion:</label>
+                    <select class="form-select" id="moderationActionFilter">
+                        <option value="">Alle Moderations Aktionen</option>
+                        <option value="user_banned">Benutzer gebannt</option>
+                        <option value="user_kicked">Benutzer gekickt</option>
+                        <option value="user_timeout">Benutzer timeout</option>
+                        <option value="message_deleted">Nachricht gelöscht</option>
+                        <option value="spam_detected">Spam erkannt</option>
+                        <option value="word_filter">Wort-Filter</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="moderationUserSearch" class="form-label">Benutzer suchen:</label>
+                    <input type="text" class="form-control" id="moderationUserSearch" placeholder="Benutzername oder ID...">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" id="applyModerationFilters">
+                        <i class="fas fa-filter me-2"></i>Filtern
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="moderationLogsContainer">
+            <!-- Moderation logs will be loaded here -->
+        </div>
+
+        <nav aria-label="Moderation log pagination" id="moderationPaginationContainer" style="display: none;">
+            <ul class="pagination justify-content-center" id="moderationPagination">
+                <!-- Pagination will be generated by JavaScript -->
+            </ul>
+        </nav>
+
+        <div class="text-center" id="moderationLoadingSpinner" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Laden...</span>
+            </div>
+            <p class="mt-2">Lade Moderation Logs...</p>
+        </div>
+    </div>
+
+    <!-- Server Logs Tab -->
+    <div class="tab-pane fade" id="server-logs" role="tabpanel">
+        <div class="filter-section">
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="serverActionFilter" class="form-label">Server Event:</label>
+                    <select class="form-select" id="serverActionFilter">
+                        <option value="">Alle Server Events</option>
+                        <option value="member_joined">Mitglied beigetreten</option>
+                        <option value="member_left">Mitglied verlassen</option>
+                        <option value="role_added">Rolle hinzugefügt</option>
+                        <option value="role_removed">Rolle entfernt</option>
+                        <option value="channel_created">Channel erstellt</option>
+                        <option value="channel_deleted">Channel gelöscht</option>
+                        <option value="channel_updated">Channel aktualisiert</option>
+                        <option value="server_updated">Server aktualisiert</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="serverUserSearch" class="form-label">Benutzer suchen:</label>
+                    <input type="text" class="form-control" id="serverUserSearch" placeholder="Benutzername oder ID...">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" id="applyServerFilters">
+                        <i class="fas fa-filter me-2"></i>Filtern
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="serverLogsContainer">
+            <!-- Server logs will be loaded here -->
+        </div>
+
+        <nav aria-label="Server log pagination" id="serverPaginationContainer" style="display: none;">
+            <ul class="pagination justify-content-center" id="serverPagination">
+                <!-- Pagination will be generated by JavaScript -->
+            </ul>
+        </nav>
+
+        <div class="text-center" id="serverLoadingSpinner" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Laden...</span>
+            </div>
+            <p class="mt-2">Lade Server Logs...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let currentFilters = {};
+let currentTab = 'all';
+
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleString('de-DE', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function getSeverityBadgeClass(severity) {
+    switch(severity) {
+        case 'high': return 'bg-danger';
+        case 'medium': return 'bg-warning';
+        case 'low': return 'bg-success';
+        default: return 'bg-secondary';
+    }
+}
+
+function getActionBadgeClass(actionType) {
+    switch(actionType) {
+        case 'message_deleted': return 'bg-warning';
+        case 'user_banned': return 'bg-danger';
+        case 'user_timeout': return 'bg-info';
+        case 'user_kicked': return 'bg-warning';
+        case 'spam_detected': return 'bg-warning';
+        case 'word_filter': return 'bg-danger';
+        case 'ticket_created': return 'bg-success';
+        case 'ticket_closed': return 'bg-secondary';
+        case 'temp_channel_created': return 'bg-info';
+        case 'temp_channel_deleted': return 'bg-secondary';
+        case 'role_added': return 'bg-success';
+        case 'role_removed': return 'bg-warning';
+        case 'channel_created': return 'bg-success';
+        case 'channel_deleted': return 'bg-danger';
+        case 'member_joined': return 'bg-success';
+        case 'member_left': return 'bg-secondary';
+        default: return 'bg-secondary';
+    }
+}
+
+function renderLog(log) {
+    const severityClass = `severity-${log.severity}`;
+    const severityBadge = getSeverityBadgeClass(log.severity);
+    const actionBadge = getActionBadgeClass(log.action_type);
+    
+    let messageContent = '';
+    if (log.message_content) {
+        messageContent = `
+            <div class="mt-2">
+                <strong>Nachrichteninhalt:</strong>
+                <div class="message-content">${escapeHtml(log.message_content)}</div>
+            </div>
+        `;
+    }
+    
+    let details = '';
+    if (log.details) {
+        details = `
+            <div class="mt-2">
+                <strong>Details:</strong>
+                <p class="mb-0 text-muted">${escapeHtml(log.details)}</p>
+            </div>
+        `;
+    }
+    
+    return `
+        <div class="card log-entry ${severityClass} mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-1">
+                        <div class="user-avatar">
+                            ${log.username.charAt(0).toUpperCase()}
+                        </div>
+                    </div>
+                    <div class="col-md-11">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="mb-1">
+                                    ${escapeHtml(log.username)}${log.discriminator ? '#' + log.discriminator : ''}
+                                    <small class="text-muted">(ID: ${log.user_id})</small>
+                                </h6>
+                                <small class="text-muted">
+                                    <i class="fas fa-clock me-1"></i>${formatTimestamp(log.timestamp)}
+                                </small>
+                            </div>
+                            <div>
+                                <span class="badge ${actionBadge} action-badge me-2">${log.action_type}</span>
+                                <span class="badge ${severityBadge} action-badge">${log.severity}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <strong>Grund:</strong> ${escapeHtml(log.reason || 'Kein Grund angegeben')}
+                        </div>
+                        
+                        ${log.channel_name ? `
+                            <div class="mb-2">
+                                <strong>Kanal:</strong> #${escapeHtml(log.channel_name)} 
+                                <small class="text-muted">(ID: ${log.channel_id})</small>
+                            </div>
+                        ` : ''}
+                        
+                        ${messageContent}
+                        ${details}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function updateStatistics(data) {
+    const logs = data.logs;
+    let highCount = 0, mediumCount = 0, lowCount = 0;
+    
+    logs.forEach(log => {
+        switch(log.severity) {
+            case 'high': highCount++; break;
+            case 'medium': mediumCount++; break;
+            case 'low': lowCount++; break;
+        }
+    });
+    
+    document.getElementById('highSeverityCount').textContent = highCount;
+    document.getElementById('mediumSeverityCount').textContent = mediumCount;
+    document.getElementById('lowSeverityCount').textContent = lowCount;
+    document.getElementById('totalCount').textContent = data.total;
+}
+
+function renderPagination(data, containerId, paginationId, loadFunction) {
+    const paginationContainer = document.getElementById(containerId);
+    const pagination = document.getElementById(paginationId);
+    
+    if (data.total_pages <= 1) {
+        paginationContainer.style.display = 'none';
+        return;
+    }
+    
+    paginationContainer.style.display = 'block';
+    pagination.innerHTML = '';
+    
+    // Previous button
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${data.page <= 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="${loadFunction}(${data.page - 1})">Vorherige</a>`;
+    pagination.appendChild(prevLi);
+    
+    // Page numbers
+    const startPage = Math.max(1, data.page - 2);
+    const endPage = Math.min(data.total_pages, data.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === data.page ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="${loadFunction}(${i})">${i}</a>`;
+        pagination.appendChild(li);
+    }
+    
+    // Next button
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${data.page >= data.total_pages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="${loadFunction}(${data.page + 1})">Nächste</a>`;
+    pagination.appendChild(nextLi);
+}
+
+function loadLogs(page = 1, category = 'all') {
+    currentPage = page;
+    currentTab = category;
+    
+    let loadingSpinner, logsContainer, paginationContainer, paginationId;
+    
+    switch(category) {
+        case 'bot':
+            loadingSpinner = document.getElementById('botLoadingSpinner');
+            logsContainer = document.getElementById('botLogsContainer');
+            paginationContainer = 'botPaginationContainer';
+            paginationId = 'botPagination';
+            break;
+        case 'moderation':
+            loadingSpinner = document.getElementById('moderationLoadingSpinner');
+            logsContainer = document.getElementById('moderationLogsContainer');
+            paginationContainer = 'moderationPaginationContainer';
+            paginationId = 'moderationPagination';
+            break;
+        case 'server':
+            loadingSpinner = document.getElementById('serverLoadingSpinner');
+            logsContainer = document.getElementById('serverLogsContainer');
+            paginationContainer = 'serverPaginationContainer';
+            paginationId = 'serverPagination';
+            break;
+        default:
+            loadingSpinner = document.getElementById('loadingSpinner');
+            logsContainer = document.getElementById('logsContainer');
+            paginationContainer = 'paginationContainer';
+            paginationId = 'pagination';
+    }
+    
+    loadingSpinner.style.display = 'block';
+    logsContainer.innerHTML = '';
+    
+    // Build query parameters
+    const params = new URLSearchParams({
+        page: page,
+        per_page: 25,
+        category: category,
+        ...currentFilters
+    });
+    
+    fetch(`/api/logs?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            loadingSpinner.style.display = 'none';
+            
+            if (data.logs.length === 0) {
+                logsContainer.innerHTML = `
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <h5>Keine Audit Logs gefunden</h5>
+                            <p class="text-muted">Es wurden keine Logs gefunden, die deinen Filterkriterien entsprechen.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                logsContainer.innerHTML = data.logs.map(renderLog).join('');
+            }
+            
+            if (category === 'all') {
+                updateStatistics(data);
+            }
+            renderPagination(data, paginationContainer, paginationId, `loadLogs`);
+        })
+        .catch(error => {
+            loadingSpinner.style.display = 'none';
+            logsContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Fehler beim Laden der Logs: ${error.message}
+                </div>
+            `;
+        });
+}
+
+function applyFilters() {
+    currentFilters = {};
+    
+    const actionFilter = document.getElementById('actionFilter').value;
+    const severityFilter = document.getElementById('severityFilter').value;
+    const userSearch = document.getElementById('userSearch').value;
+    
+    if (actionFilter) currentFilters.action_type = actionFilter;
+    if (severityFilter) currentFilters.severity = severityFilter;
+    if (userSearch) currentFilters.user_search = userSearch;
+    
+    loadLogs(1, 'all');
+}
+
+function applyBotFilters() {
+    currentFilters = {};
+    
+    const actionFilter = document.getElementById('botActionFilter').value;
+    const userSearch = document.getElementById('botUserSearch').value;
+    
+    if (actionFilter) currentFilters.action_type = actionFilter;
+    if (userSearch) currentFilters.user_search = userSearch;
+    
+    loadLogs(1, 'bot');
+}
+
+function applyModerationFilters() {
+    currentFilters = {};
+    
+    const actionFilter = document.getElementById('moderationActionFilter').value;
+    const userSearch = document.getElementById('moderationUserSearch').value;
+    
+    if (actionFilter) currentFilters.action_type = actionFilter;
+    if (userSearch) currentFilters.user_search = userSearch;
+    
+    loadLogs(1, 'moderation');
+}
+
+function applyServerFilters() {
+    currentFilters = {};
+    
+    const actionFilter = document.getElementById('serverActionFilter').value;
+    const userSearch = document.getElementById('serverUserSearch').value;
+    
+    if (actionFilter) currentFilters.action_type = actionFilter;
+    if (userSearch) currentFilters.user_search = userSearch;
+    
+    loadLogs(1, 'server');
+}
+
+// Event listeners
+document.getElementById('applyFilters').addEventListener('click', applyFilters);
+document.getElementById('applyBotFilters').addEventListener('click', applyBotFilters);
+document.getElementById('applyModerationFilters').addEventListener('click', applyModerationFilters);
+document.getElementById('applyServerFilters').addEventListener('click', applyServerFilters);
+
+// Tab change event listeners
+document.getElementById('all-logs-tab').addEventListener('click', () => {
+    currentFilters = {};
+    loadLogs(1, 'all');
+});
+
+document.getElementById('bot-logs-tab').addEventListener('click', () => {
+    currentFilters = {};
+    loadLogs(1, 'bot');
+});
+
+document.getElementById('moderation-logs-tab').addEventListener('click', () => {
+    currentFilters = {};
+    loadLogs(1, 'moderation');
+});
+
+document.getElementById('server-logs-tab').addEventListener('click', () => {
+    currentFilters = {};
+    loadLogs(1, 'server');
+});
+
+// Auto-refresh every 30 seconds
+setInterval(() => {
+    loadLogs(currentPage, currentTab);
+}, 30000);
+
+// Initial load
+loadLogs();
+</script>
+{% endblock %}
