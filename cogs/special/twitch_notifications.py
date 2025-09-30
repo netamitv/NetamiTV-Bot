@@ -238,8 +238,8 @@ class TwitchNotifications(commands.Cog):
         
         return embed
     
-    def create_offline_embed(self, user_info):
-        """Create embed for offline notification - Notify Me bot style"""
+    def create_offline_embed(self, user_info, vod_url=None):
+        """Create embed for offline notification with optional VOD link"""
         embed = discord.Embed(
             color=0x808080,
             timestamp=datetime.utcnow()
@@ -250,6 +250,13 @@ class TwitchNotifications(commands.Cog):
             value=f"**[{user_info['display_name']}](https://www.twitch.tv/{user_info['login']})** ist jetzt offline.",
             inline=False
         )
+        
+        if vod_url:
+            embed.add_field(
+                name="🎬 Stream VOD",
+                value=f"[Zum VOD]({vod_url})",
+                inline=False
+            )
         
         embed.add_field(
             name="💜 Danke fürs Zuschauen!",
@@ -486,17 +493,29 @@ class TwitchNotifications(commands.Cog):
                 
                 await message.edit(content=content, embed=embed, view=view)
                 
+                # Clear any previous VOD info
+                try:
+                    last_vod = await self.get_vod_info(user_id)
+                    if last_vod:
+                        self.last_vod_id = last_vod['id']
+                except:
+                    self.last_vod_id = None
+                    
                 self.stream_status[user_id] = True
                 logger.info(f"Updated persistent message - {username} went live")
                 
             elif not is_live and was_live:
-                embed = self.create_offline_embed(user_info)
+                # Wait briefly for VOD to be available
+                await asyncio.sleep(10)
+                vod_info = await self.get_vod_info(user_id)
+                vod_url = vod_info['url'] if vod_info else None
+                
+                embed = self.create_offline_embed(user_info, vod_url)
                 view = self.create_watch_button(username)
                 
                 await message.edit(content=None, embed=embed, view=view)
                 
                 if thread:
-                    await asyncio.sleep(30)
                     await self.post_vod_link(user_id, thread.id)
                 
                 self.stream_status[user_id] = False
@@ -508,8 +527,8 @@ class TwitchNotifications(commands.Cog):
     async def post_vod_link(self, user_id, thread_id):
         """Post VOD link in the thread when available"""
         try:
-            for attempt in range(5):
-                await asyncio.sleep(60)
+            for attempt in range(10):  # Increased attempts
+                await asyncio.sleep(30)  # Check more frequently
                 
                 vod_info = await self.get_vod_info(user_id)
                 if vod_info:
@@ -525,6 +544,7 @@ class TwitchNotifications(commands.Cog):
                             )
                             embed.add_field(name="Dauer", value=vod_info['duration'], inline=True)
                             embed.add_field(name="Aufrufe", value=f"{vod_info['view_count']:,}", inline=True)
+                            embed.add_field(name="Erstellt", value=f"<t:{int(created_at.timestamp())}:R>", inline=True)
                             
                             view = discord.ui.View()
                             button = discord.ui.Button(
@@ -535,10 +555,20 @@ class TwitchNotifications(commands.Cog):
                             )
                             view.add_item(button)
                             
-                            await thread.send(embed=embed, view=view)
-                            logger.info(f"Posted VOD link in thread {thread_id}")
-                        break
-                        
+                            vod_msg = await thread.send(embed=embed, view=view)
+                            
+                            # Update offline message with VOD link
+                            channel = thread.parent.channel
+                            message = await channel.fetch_message(self.config['persistent_message_id'])
+                            offline_embed = self.create_offline_embed(await self.get_user_info(self.config['twitch_username']), vod_info['url'])
+                            await message.edit(embed=offline_embed)
+                            
+                            logger.info(f"Posted VOD link in thread {thread_id} and updated offline message")
+                            return
+                
+            if attempt == 9:  # Last attempt
+                logger.warning("No VOD found after maximum attempts")
+                
         except Exception as e:
             logger.error(f"Error posting VOD link: {e}")
     
