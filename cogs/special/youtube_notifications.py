@@ -145,16 +145,18 @@ class YouTubeNotifications(commands.Cog):
 
     @tasks.loop(seconds=60)
     async def check_youtube_feed(self):
-        """Check YouTube RSS feeds periodically"""
+        """Check YouTube RSS feed periodically"""
         if not self.config.get('enabled', False):
             return
             
         discord_channel_id = self.config.get('discord_channel_id')
         if not discord_channel_id:
+            logger.error("No Discord channel configured")
             return
             
-        channel = self.bot.get_channel(discord_channel_id)
-        if not channel:
+        discord_channel = self.bot.get_channel(discord_channel_id)
+        if not discord_channel:
+            logger.error(f"Could not find Discord channel with ID {discord_channel_id}")
             return
 
         for channel_id, channel_config in self.config['channels'].items():
@@ -194,12 +196,17 @@ class YouTubeNotifications(commands.Cog):
                         # Handle role mention
                         content = None
                         if 'ping_role_id' in channel_config:
-                            role = channel.guild.get_role(channel_config['ping_role_id'])
+                            role = discord_channel.guild.get_role(channel_config['ping_role_id'])
                             if role:
                                 content = role.mention
                         
-                        await channel.send(content=content, embed=embed, view=view)
-                        logger.info(f"Posted new video notification for {channel_info['title']}")
+                        try:
+                            await discord_channel.send(content=content, embed=embed, view=view)
+                            logger.info(f"Posted new video notification for {channel_info['title']} in channel {discord_channel.name}")
+                        except discord.Forbidden:
+                            logger.error(f"No permission to send messages in channel {discord_channel.name}")
+                        except discord.HTTPException as e:
+                            logger.error(f"Error sending message: {e}")
             
             except Exception as e:
                 logger.error(f"Error checking channel {channel_id}: {e}")
@@ -398,5 +405,39 @@ class YouTubeNotifications(commands.Cog):
         status = "aktiviert" if self.config['channels'][channel_id]['enabled'] else "deaktiviert"
         await interaction.response.send_message(f"Kanal wurde {status}.", ephemeral=True)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        )            ephemeral=True            "Nutze `/youtube_add` um YouTube-Kanäle hinzuzufügen.",             f"✅ YouTube-Benachrichtigungen werden in {channel.mention} gesendet.\n"        await interaction.response.send_message(                self.save_config()        self.config['enabled'] = True        self.config['discord_channel_id'] = channel.id            return            )                ephemeral=True                "Benötigt werden: Nachrichten senden, Embeds senden",                 "❌ Der Bot hat nicht die nötigen Berechtigungen im ausgewählten Kanal.\n"            await interaction.response.send_message(        if not (channel_permissions.send_messages and channel_permissions.embed_links):        channel_permissions = channel.permissions_for(channel.guild.me)        # Prüfe Berechtigungen im Zielkanal            return            await interaction.response.send_message("❌ Du bist nicht berechtigt, diesen Befehl zu verwenden.", ephemeral=True)        if not self.bot.is_authorized(interaction.user.id):        """Setup YouTube notifications"""    ):        channel: discord.TextChannel,        interaction: discord.Interaction,        self,    async def youtube_setup(    )        channel="Discord Channel für Benachrichtigungen"    @app_commands.describe(    @app_commands.command(name="youtube_setup", description="Konfiguriere YouTube-Benachrichtigungen")
 async def setup(bot):
     await bot.add_cog(YouTubeNotifications(bot))
