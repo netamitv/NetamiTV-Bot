@@ -536,6 +536,9 @@ class TwitchNotifications(commands.Cog):
                     if datetime.utcnow().replace(tzinfo=created_at.tzinfo) - created_at < timedelta(hours=2):
                         thread = self.bot.get_channel(thread_id)
                         if thread:
+                            # Generate thumbnail URL from template
+                            thumbnail_url = vod_info['thumbnail_url'].replace('%{width}', '1920').replace('%{height}', '1080')
+                            
                             embed = discord.Embed(
                                 title="🎬 VOD verfügbar!",
                                 description=f"**{vod_info['title']}**",
@@ -545,6 +548,7 @@ class TwitchNotifications(commands.Cog):
                             embed.add_field(name="Dauer", value=vod_info['duration'], inline=True)
                             embed.add_field(name="Aufrufe", value=f"{vod_info['view_count']:,}", inline=True)
                             embed.add_field(name="Erstellt", value=f"<t:{int(created_at.timestamp())}:R>", inline=True)
+                            embed.set_image(url=thumbnail_url)  # Add VOD thumbnail
                             
                             view = discord.ui.View()
                             button = discord.ui.Button(
