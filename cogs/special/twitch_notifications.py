@@ -527,8 +527,8 @@ class TwitchNotifications(commands.Cog):
     async def post_vod_link(self, user_id, thread_id):
         """Post VOD link in the thread when available"""
         try:
-            for attempt in range(10):  # Increased attempts
-                await asyncio.sleep(30)  # Check more frequently
+            for attempt in range(10):
+                await asyncio.sleep(30)
                 
                 vod_info = await self.get_vod_info(user_id)
                 if vod_info:
@@ -536,8 +536,8 @@ class TwitchNotifications(commands.Cog):
                     if datetime.utcnow().replace(tzinfo=created_at.tzinfo) - created_at < timedelta(hours=2):
                         thread = self.bot.get_channel(thread_id)
                         if thread:
-                            # Generate thumbnail URL from template
-                            thumbnail_url = vod_info['thumbnail_url'].replace('%{width}', '1920').replace('%{height}', '1080')
+                            # Korrekte URL-Template-Ersetzung für VOD-Thumbnails
+                            thumbnail_url = vod_info['thumbnail_url'].replace('{width}', '1920').replace('{height}', '1080')
                             
                             embed = discord.Embed(
                                 title="🎬 VOD verfügbar!",
@@ -548,8 +548,8 @@ class TwitchNotifications(commands.Cog):
                             embed.add_field(name="Dauer", value=vod_info['duration'], inline=True)
                             embed.add_field(name="Aufrufe", value=f"{vod_info['view_count']:,}", inline=True)
                             embed.add_field(name="Erstellt", value=f"<t:{int(created_at.timestamp())}:R>", inline=True)
-                            embed.set_image(url=thumbnail_url)  # Add VOD thumbnail
-                            
+                            embed.set_image(url=thumbnail_url)  # Thumbnail wird korrekt gesetzt
+
                             view = discord.ui.View()
                             button = discord.ui.Button(
                                 label="VOD anschauen",
@@ -558,21 +558,21 @@ class TwitchNotifications(commands.Cog):
                                 emoji="🎬"
                             )
                             view.add_item(button)
-                            
+
                             vod_msg = await thread.send(embed=embed, view=view)
-                            
+
                             # Update offline message with VOD link
                             channel = thread.parent.channel
                             message = await channel.fetch_message(self.config['persistent_message_id'])
                             offline_embed = self.create_offline_embed(await self.get_user_info(self.config['twitch_username']), vod_info['url'])
                             await message.edit(embed=offline_embed)
-                            
+
                             logger.info(f"Posted VOD link in thread {thread_id} and updated offline message")
                             return
-                
+
             if attempt == 9:  # Last attempt
                 logger.warning("No VOD found after maximum attempts")
-                
+
         except Exception as e:
             logger.error(f"Error posting VOD link: {e}")
     
