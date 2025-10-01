@@ -51,6 +51,7 @@ class Bot(commands.Bot):
             'cogs.special.tempchannel',
             'cogs.special.web_dashboard',
             'cogs.special.twitch_notifications',
+            'cogs.special.youtube_notifications',
         ]
         
         self.normal_extensions = [
@@ -63,6 +64,8 @@ class Bot(commands.Bot):
             'cogs.normal.moderation',
             'cogs.normal.review',
             'cogs.audit_logger',
+            'cogs.level',
+            'cogs.versystem',
         ]
 
     def is_authorized(self, user_id: int) -> bool:
