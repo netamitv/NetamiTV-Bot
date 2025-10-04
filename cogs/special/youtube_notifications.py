@@ -143,24 +143,23 @@ class YouTubeNotifications(commands.Cog):
         view.add_item(button)
         return view
 
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=60)  # Check every 60 seconds
     async def check_youtube_feed(self):
         """Check YouTube RSS feed periodically"""
         if not self.config.get('enabled', False):
             return
-            
-        discord_channel_id = self.config.get('discord_channel_id')
-        if not discord_channel_id:
-            logger.error("No Discord channel configured")
-            return
-            
-        discord_channel = self.bot.get_channel(discord_channel_id)
-        if not discord_channel:
-            logger.error(f"Could not find Discord channel with ID {discord_channel_id}")
-            return
 
         for channel_id, channel_config in self.config['channels'].items():
             if not channel_config.get('enabled', True):
+                continue
+
+            discord_channel_id = channel_config.get('discord_channel_id')
+            if not discord_channel_id:
+                continue
+
+            discord_channel = self.bot.get_channel(discord_channel_id)
+            if not discord_channel:
+                logger.error(f"Could not find Discord channel with ID {discord_channel_id}")
                 continue
 
             try:
@@ -405,39 +404,156 @@ class YouTubeNotifications(commands.Cog):
         status = "aktiviert" if self.config['channels'][channel_id]['enabled'] else "deaktiviert"
         await interaction.response.send_message(f"Kanal wurde {status}.", ephemeral=True)
 
+    @app_commands.command(name="youtube_embed", description="Sende YouTube Video Updates in einen Channel")
+    @app_commands.describe(
+        channel_id="YouTube Channel ID",
+        discord_channel="Discord Channel für die Updates",
+        ping_role="Role die gepingt werden soll (optional)"
+    )
+    async def youtube_embed(
+        self,
+        interaction: discord.Interaction,
+        channel_id: str,
+        discord_channel: discord.TextChannel,
+        ping_role: discord.Role = None
+    ):
+        """Setup YouTube notifications for a specific channel"""
+        if not self.bot.is_authorized(interaction.user.id):
+            await interaction.response.send_message("❌ Du bist nicht berechtigt, diesen Befehl zu verwenden.", ephemeral=True)
+            return
 
+        await interaction.response.defer(ephemeral=True)
 
+        # Check channel permissions
+        channel_permissions = discord_channel.permissions_for(discord_channel.guild.me)
+        if not (channel_permissions.send_messages and channel_permissions.embed_links):
+            await interaction.followup.send(
+                "❌ Der Bot hat nicht die nötigen Berechtigungen im ausgewählten Kanal.\n"
+                "Benötigt werden: Nachrichten senden, Embeds senden",
+                ephemeral=True
+            )
+            return
 
+        try:
+            # Test if YouTube channel exists
+            rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+            async with self.session.get(rss_url) as response:
+                if response.status != 200:
+                    await interaction.followup.send("❌ YouTube Kanal nicht gefunden.", ephemeral=True)
+                    return
+                
+                feed_content = await response.text()
+                feed = feedparser.parse(feed_content)
+                
+                if not feed.entries:
+                    await interaction.followup.send("❌ Keine Videos im Kanal gefunden.", ephemeral=True)
+                    return
+                
+                # Add channel to config
+                self.config['channels'][channel_id] = {
+                    'enabled': True,
+                    'latest_video_id': feed.entries[0].yt_videoid,
+                    'discord_channel_id': discord_channel.id,
+                    'ping_role_id': ping_role.id if ping_role else None
+                }
+                self.save_config()
 
+                if not self.check_youtube_feed.is_running():
+                    self.config['enabled'] = True
+                    self.check_youtube_feed.start()
+                
+                channel_info = {
+                    'title': feed.feed.title,
+                    'link': feed.feed.link,
+                    'thumbnail': self.extract_channel_thumbnail(feed_content)
+                }
+                
+                embed = discord.Embed(
+                    title="✅ YouTube Kanal eingerichtet",
+                    description=f"**{channel_info['title']}** wurde eingerichtet.\nUpdates werden in {discord_channel.mention} gesendet.",
+                    color=0x00FF00,
+                    url=channel_info['link']
+                )
+                
+                if ping_role:
+                    embed.add_field(name="🔔 Ping Role", value=ping_role.mention)
+                
+                if channel_info['thumbnail']:
+                    embed.set_thumbnail(url=channel_info['thumbnail'])
+                
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                
+        except Exception as e:
+            logger.error(f"Error setting up YouTube channel: {e}")
+            await interaction.followup.send("❌ Fehler beim Einrichten des Kanals.", ephemeral=True)
 
+    @tasks.loop(seconds=60)
+    async def check_youtube_feed(self):
+        """Check YouTube RSS feed periodically"""
+        if not self.config.get('enabled', False):
+            return
+            
+        discord_channel_id = self.config.get('discord_channel_id')
+        if not discord_channel_id:
+            logger.error("No Discord channel configured")
+            return
+            
+        discord_channel = self.bot.get_channel(discord_channel_id)
+        if not discord_channel:
+            logger.error(f"Could not find Discord channel with ID {discord_channel_id}")
+            return
 
+        for channel_id, channel_config in self.config['channels'].items():
+            if not channel_config.get('enabled', True):
+                continue
 
+            try:
+                rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+                async with self.session.get(rss_url) as response:
+                    if response.status != 200:
+                        continue
+                        
+                    feed_content = await response.text()
+                    feed = feedparser.parse(feed_content)
+                    
+                    if not feed.entries:
+                        continue
+                        
+                    latest_entry = feed.entries[0]
+                    latest_id = latest_entry.yt_videoid
+                    
+                    if latest_id != channel_config.get('latest_video_id'):
+                        # Update latest video ID
+                        self.config['channels'][channel_id]['latest_video_id'] = latest_id
+                        self.save_config()
+                        
+                        # Get channel info for embed
+                        channel_info = {
+                            'title': feed.feed.title,
+                            'link': feed.feed.link,
+                            'thumbnail': self.extract_channel_thumbnail(feed_content)
+                        }
+                        
+                        embed = self.create_video_embed(latest_entry, channel_info)
+                        view = self.create_watch_button(latest_entry.link)
+                        
+                        # Handle role mention
+                        content = None
+                        if 'ping_role_id' in channel_config:
+                            role = discord_channel.guild.get_role(channel_config['ping_role_id'])
+                            if role:
+                                content = role.mention
+                        
+                        try:
+                            await discord_channel.send(content=content, embed=embed, view=view)
+                            logger.info(f"Posted new video notification for {channel_info['title']} in channel {discord_channel.name}")
+                        except discord.Forbidden:
+                            logger.error(f"No permission to send messages in channel {discord_channel.name}")
+                        except discord.HTTPException as e:
+                            logger.error(f"Error sending message: {e}")
+            
+            except Exception as e:
+                logger.error(f"Error checking channel {channel_id}: {e}")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        )            ephemeral=True            "Nutze `/youtube_add` um YouTube-Kanäle hinzuzufügen.",             f"✅ YouTube-Benachrichtigungen werden in {channel.mention} gesendet.\n"        await interaction.response.send_message(                self.save_config()        self.config['enabled'] = True        self.config['discord_channel_id'] = channel.id            return            )                ephemeral=True                "Benötigt werden: Nachrichten senden, Embeds senden",                 "❌ Der Bot hat nicht die nötigen Berechtigungen im ausgewählten Kanal.\n"            await interaction.response.send_message(        if not (channel_permissions.send_messages and channel_permissions.embed_links):        channel_permissions = channel.permissions_for(channel.guild.me)        # Prüfe Berechtigungen im Zielkanal            return            await interaction.response.send_message("❌ Du bist nicht berechtigt, diesen Befehl zu verwenden.", ephemeral=True)        if not self.bot.is_authorized(interaction.user.id):        """Setup YouTube notifications"""    ):        channel: discord.TextChannel,        interaction: discord.Interaction,        self,    async def youtube_setup(    )        channel="Discord Channel für Benachrichtigungen"    @app_commands.describe(    @app_commands.command(name="youtube_setup", description="Konfiguriere YouTube-Benachrichtigungen")
 async def setup(bot):
     await bot.add_cog(YouTubeNotifications(bot))
