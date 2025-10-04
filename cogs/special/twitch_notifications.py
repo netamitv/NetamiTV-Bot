@@ -245,18 +245,15 @@ class TwitchNotifications(commands.Cog):
             timestamp=datetime.utcnow()
         )
         
+        description = f"**[{user_info['display_name']}](https://www.twitch.tv/{user_info['login']})** ist jetzt offline."
+        if vod_url:
+            description += f"\n\n🎬 [Zum letzten VOD]({vod_url})"
+        
         embed.add_field(
             name="⚫ OFFLINE",
-            value=f"**[{user_info['display_name']}](https://www.twitch.tv/{user_info['login']})** ist jetzt offline.",
+            value=description,
             inline=False
         )
-        
-        if vod_url:
-            embed.add_field(
-                name="🎬 Stream VOD",
-                value=f"[Zum VOD]({vod_url})",
-                inline=False
-            )
         
         embed.add_field(
             name="💜 Danke fürs Zuschauen!",
@@ -527,55 +524,64 @@ class TwitchNotifications(commands.Cog):
     async def post_vod_link(self, user_id, thread_id):
         """Post VOD link in the thread when available"""
         try:
-            for attempt in range(10):
+            for attempt in range(10):  # Try for 5 minutes (10 attempts * 30 seconds)
                 await asyncio.sleep(30)
                 
                 vod_info = await self.get_vod_info(user_id)
-                if vod_info:
+                if vod_info and vod_info.get('url'):
                     created_at = datetime.fromisoformat(vod_info['created_at'].replace('Z', '+00:00'))
                     if datetime.utcnow().replace(tzinfo=created_at.tzinfo) - created_at < timedelta(hours=2):
-                        thread = self.bot.get_channel(thread_id)
-                        if thread:
-                            # Korrekte URL-Template-Ersetzung für VOD-Thumbnails
+                        # Get thread and parent message
+                        thread = await self.bot.fetch_channel(thread_id)
+                        parent_channel = await self.bot.fetch_channel(thread.parent_id)
+                        if thread and parent_channel:
+                            # Create VOD embed for thread
                             thumbnail_url = vod_info['thumbnail_url'].replace('{width}', '1920').replace('{height}', '1080')
-                            
-                            embed = discord.Embed(
+                            vod_embed = discord.Embed(
                                 title="🎬 VOD verfügbar!",
-                                description=f"**{vod_info['title']}**",
+                                description=f"**{vod_info['title']}**\n\n[Direkt zum VOD]({vod_info['url']})",
                                 color=0x9146FF,
                                 url=vod_info['url']
                             )
-                            embed.add_field(name="Dauer", value=vod_info['duration'], inline=True)
-                            embed.add_field(name="Aufrufe", value=f"{vod_info['view_count']:,}", inline=True)
-                            embed.add_field(name="Erstellt", value=f"<t:{int(created_at.timestamp())}:R>", inline=True)
-                            embed.set_image(url=thumbnail_url)  # Thumbnail wird korrekt gesetzt
+                            vod_embed.add_field(name="Dauer", value=vod_info['duration'], inline=True)
+                            vod_embed.add_field(name="Aufrufe", value=f"{vod_info['view_count']:,}", inline=True)
+                            vod_embed.add_field(name="Erstellt", value=f"<t:{int(created_at.timestamp())}:R>", inline=True)
+                            vod_embed.set_image(url=thumbnail_url)
 
+                            # Create and send VOD message in thread
                             view = discord.ui.View()
-                            button = discord.ui.Button(
+                            view.add_item(discord.ui.Button(
                                 label="VOD anschauen",
                                 style=discord.ButtonStyle.link,
                                 url=vod_info['url'],
                                 emoji="🎬"
-                            )
-                            view.add_item(button)
-
-                            vod_msg = await thread.send(embed=embed, view=view)
+                            ))
+                            await thread.send(embed=vod_embed, view=view)
 
                             # Update offline message with VOD link
-                            channel = thread.parent.channel
-                            message = await channel.fetch_message(self.config['persistent_message_id'])
-                            offline_embed = self.create_offline_embed(await self.get_user_info(self.config['twitch_username']), vod_info['url'])
-                            await message.edit(embed=offline_embed)
+                            try:
+                                persistent_msg = await parent_channel.fetch_message(self.config['persistent_message_id'])
+                                if persistent_msg:
+                                    user_info = await self.get_user_info(self.config['twitch_username'])
+                                    if user_info:
+                                        offline_embed = self.create_offline_embed(user_info, vod_info['url'])
+                                        view = self.create_watch_button(user_info['login'])
+                                        await persistent_msg.edit(embed=offline_embed, view=view)
+                            except Exception as e:
+                                logger.error(f"Error updating offline message with VOD: {e}")
 
-                            logger.info(f"Posted VOD link in thread {thread_id} and updated offline message")
-                            return
+                            logger.info(f"Successfully posted VOD link in thread and updated offline message")
+                            return True
 
-            if attempt == 9:  # Last attempt
-                logger.warning("No VOD found after maximum attempts")
+                logger.debug(f"VOD not found yet, attempt {attempt + 1}/10")
+                
+            logger.warning("No VOD found after maximum attempts")
+            return False
 
         except Exception as e:
             logger.error(f"Error posting VOD link: {e}")
-    
+            return False
+
     @check_stream_status.before_loop
     async def before_check_stream_status(self):
         """Wait for bot to be ready before starting the loop"""
